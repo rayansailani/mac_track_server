@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+let ws = new WebSocket("ws://localhost:9000");
+
+ws.onopen = () => {
+    console.log("WebSocket connected");
+};
+
+ws.onmessage = (msg) => console.log("Received: ", msg);
+ws.onerror = (e) => console.log("WebSocket error: ", e);
+
+// Send mouse/touch coordinates as JSON on mousemove
+window.addEventListener('mousemove', function(e) {
+    if (ws.readyState === WebSocket.OPEN) {
+        const payload = {
+            type: "move",
+            x: e.clientX,
+            y: e.clientY,
+            timestamp: Date.now()
+        };
+        ws.send(JSON.stringify(payload));
+    }
+});
+</script>
+<p>Check your Xcode console for a message when you open this page.</p>
+</body>
+</html>
