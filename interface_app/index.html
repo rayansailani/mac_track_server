@@ -2,28 +2,57 @@
 <html>
 <body>
 <script>
-let ws = new WebSocket("ws://localhost:9000");
+// Allow user to set WebSocket URL
+let ws = null;
+let lastX = null, lastY = null;
 
-ws.onopen = () => {
-    console.log("WebSocket connected");
-};
+function connectWS(url) {
+    if (ws) ws.close();
+    ws = new WebSocket(url);
+    ws.onopen = () => {
+        console.log("WebSocket connected");
+        document.getElementById('status').textContent = 'Connected!';
+    };
+    ws.onmessage = (msg) => console.log("Received: ", msg);
+    ws.onerror = (e) => {
+        console.log("WebSocket error: ", e);
+        document.getElementById('status').textContent = 'WebSocket error!';
+    };
+    ws.onclose = () => {
+        document.getElementById('status').textContent = 'Disconnected';
+    };
+}
 
-ws.onmessage = (msg) => console.log("Received: ", msg);
-ws.onerror = (e) => console.log("WebSocket error: ", e);
+document.addEventListener('DOMContentLoaded', function() {
+    const urlInput = document.getElementById('ws-url');
+    const connectBtn = document.getElementById('connect-btn');
+    connectBtn.onclick = () => connectWS(urlInput.value);
+});
 
-// Send mouse/touch coordinates as JSON on mousemove
 window.addEventListener('mousemove', function(e) {
-    if (ws.readyState === WebSocket.OPEN) {
-        const payload = {
-            type: "move",
-            x: e.clientX,
-            y: e.clientY,
-            timestamp: Date.now()
-        };
-        ws.send(JSON.stringify(payload));
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        if (lastX !== null && lastY !== null) {
+            const dx = e.clientX - lastX;
+            const dy = e.clientY - lastY;
+            const payload = {
+                type: "move",
+                dx: dx,
+                dy: dy,
+                timestamp: Date.now()
+            };
+            ws.send(JSON.stringify(payload));
+        }
+        lastX = e.clientX;
+        lastY = e.clientY;
     }
 });
 </script>
+<p>
+  <label for="ws-url"><b>WebSocket URL:</b></label>
+  <input id="ws-url" type="text" value="ws://localhost:9000" style="width: 250px;" />
+  <button id="connect-btn">Connect</button>
+  <span id="status" style="margin-left: 1em; color: #888;">Not connected</span>
+</p>
 <p>Check your Xcode console for a message when you open this page.</p>
 </body>
 </html>

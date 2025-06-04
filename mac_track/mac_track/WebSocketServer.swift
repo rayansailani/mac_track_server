@@ -9,6 +9,8 @@ import Foundation
 import NIO
 import NIOHTTP1
 import NIOWebSocket
+import CoreGraphics
+import AppKit 
 
 // MARK: - HTTPHandler for WebSocket upgrade
 final class HTTPHandler: ChannelInboundHandler {
@@ -55,8 +57,8 @@ class WebSocketServer {
             .childChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1 as Int32)
 
         do {
-            channel = try bootstrap.bind(host: "localhost", port: port).wait()
-            print("✅ WebSocket server started on ws://localhost:\(port)")
+            channel = try bootstrap.bind(host: "0.0.0.0", port: port).wait()
+            print("✅ WebSocket server started on ws://0.0.0.0:\(port)")
         } catch {
             print("❌ Failed to start WebSocket server: \(error)")
         }
@@ -75,10 +77,35 @@ final class WebSocketHandler: ChannelInboundHandler {
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let frame = self.unwrapInboundIn(data)
         if case .text = frame.opcode, let text = frame.unmaskedDataAsString {
-            print("Received text: \(text)")
-            // TODO: Parse gesture/touch data and trigger events
+            if let jsonData = text.data(using: .utf8) {
+                do {
+                    let move = try JSONDecoder().decode(MoveEvent.self, from: jsonData)
+                    print(move)
+                    // Only process move events if type is "move" and both dx/dy are present
+                    if move.type == "move", let dx = move.dx, let dy = move.dy, let screen = NSScreen.main {
+                        let screenWidth = screen.frame.width
+                        let screenHeight = screen.frame.height
+                        let mappedDx = Double(dx) * Double(screenWidth)
+                        let mappedDy = Double(dy) * Double(screenHeight)
+                        CursorController.moveCursorBy(dx: mappedDx, dy: mappedDy)
+                    }
+                    // You can add click/gesture handling here in the future
+                } catch {
+                    print("Received text: \(text)")
+                }
+            }
         }
     }
+}
+
+struct MoveEvent: Codable {
+    let type: String
+    let dx: Double?
+    let dy: Double?
+    let button: String?
+    let gesture: String?
+    let pinchDelta: Double?
+    let timestamp: Double?
 }
 
 private extension WebSocketFrame {

@@ -7,11 +7,11 @@ This project aims to let you use your iPhone as a fully-featured trackpad for yo
 ### 1. macOS App Setup
 - [x] Create a new macOS App project in Xcode (Swift, SwiftUI or Storyboard)
 - [x] Save the project in this folder (`mac_track`)
-- [ ] Set up basic app structure (AppDelegate, main window, etc.)
+- [x] Set up basic app structure (AppDelegate, main window, etc.)
 
 ### 2. Networking: Receive Gesture Data
-- [ ] Add a TCP/UDP/WebSocket server to the macOS app
-- [ ] Define a protocol for gesture/touch data (e.g., JSON or binary)
+- [x] Add a TCP/UDP/WebSocket server to the macOS app
+- [x] Define a protocol for gesture/touch data (e.g., JSON or binary)
 - [ ] Parse incoming data and map to gesture events
 
 ### 3. Event Injection: Simulate Trackpad Gestures
