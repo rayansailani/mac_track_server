@@ -3,7 +3,8 @@ import CoreGraphics
 import AppKit
 
 class CursorController {
-    private static var lastPosition: CGPoint? = nil
+    // Make lastPosition internal so WebSocketServer can set it if needed
+    static var lastPosition: CGPoint? = nil
 
     static func moveCursorBy(dx: Double, dy: Double) {
         let screenFrame = NSScreen.main?.frame ?? .zero
@@ -28,10 +29,26 @@ class CursorController {
         let mouseButton: CGMouseButton = (button == "right") ? .right : .left
         let mouseDownType: CGEventType = (button == "right") ? .rightMouseDown : .leftMouseDown
         let mouseUpType: CGEventType = (button == "right") ? .rightMouseUp : .leftMouseUp
+        print("[CursorController] emulateClick called: button=\(button), loc=\(loc)")
         if let mouseDown = CGEvent(mouseEventSource: nil, mouseType: mouseDownType, mouseCursorPosition: loc, mouseButton: mouseButton),
            let mouseUp = CGEvent(mouseEventSource: nil, mouseType: mouseUpType, mouseCursorPosition: loc, mouseButton: mouseButton) {
             mouseDown.post(tap: .cghidEventTap)
             mouseUp.post(tap: .cghidEventTap)
+            print("[CursorController] CGEvent posted for button=\(button)")
+        } else {
+            print("[CursorController] Failed to create CGEvent for click")
         }
+    }
+    static func scrollBy(dx: Double, dy: Double) {
+        // dy: vertical scroll, dx: horizontal scroll
+        let event = CGEvent(
+            scrollWheelEvent2Source: nil,
+            units: .pixel,
+            wheelCount: 2,
+            wheel1: Int32(dy), // vertical scroll (invert for natural feel)
+            wheel2: Int32(dx), // horizontal scroll
+            wheel3: 0
+        )
+        event?.post(tap: .cghidEventTap)
     }
 }

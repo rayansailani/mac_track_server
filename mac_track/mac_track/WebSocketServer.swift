@@ -88,10 +88,16 @@ final class WebSocketHandler: ChannelInboundHandler {
                         let mappedDx = Double(dx) * Double(screenWidth)
                         let mappedDy = Double(dy) * Double(screenHeight)
                         CursorController.moveCursorBy(dx: mappedDx, dy: mappedDy)
-                    }
-                    // Handle click events
-                    if move.type == "click", let button = move.button {
+                    } else if move.type == "click", let button = move.button {
+                        print("[WebSocketServer] Click event received: button=\(button)")
                         CursorController.emulateClick(button: button)
+                    }
+                    else if move.type == "scroll", let dx = move.dx, let dy = move.dy {
+                        let scrollScale: Double = 500.0
+                        CursorController.scrollBy(dx: dx * scrollScale, dy: dy * scrollScale)
+                    }
+                else {
+                        print("[WebSocketServer] Unknown or unhandled event: \(move)")
                     }
                     // You can add gesture handling here in the future
                 } catch {
