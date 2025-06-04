@@ -89,7 +89,11 @@ final class WebSocketHandler: ChannelInboundHandler {
                         let mappedDy = Double(dy) * Double(screenHeight)
                         CursorController.moveCursorBy(dx: mappedDx, dy: mappedDy)
                     }
-                    // You can add click/gesture handling here in the future
+                    // Handle click events
+                    if move.type == "click", let button = move.button {
+                        CursorController.emulateClick(button: button)
+                    }
+                    // You can add gesture handling here in the future
                 } catch {
                     print("Received text: \(text)")
                 }

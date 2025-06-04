@@ -23,4 +23,15 @@ class CursorController {
         CGWarpMouseCursorPosition(pos)
         lastPosition = pos
     }
+    static func emulateClick(button: String) {
+        let loc = lastPosition ?? NSEvent.mouseLocation
+        let mouseButton: CGMouseButton = (button == "right") ? .right : .left
+        let mouseDownType: CGEventType = (button == "right") ? .rightMouseDown : .leftMouseDown
+        let mouseUpType: CGEventType = (button == "right") ? .rightMouseUp : .leftMouseUp
+        if let mouseDown = CGEvent(mouseEventSource: nil, mouseType: mouseDownType, mouseCursorPosition: loc, mouseButton: mouseButton),
+           let mouseUp = CGEvent(mouseEventSource: nil, mouseType: mouseUpType, mouseCursorPosition: loc, mouseButton: mouseButton) {
+            mouseDown.post(tap: .cghidEventTap)
+            mouseUp.post(tap: .cghidEventTap)
+        }
+    }
 }
