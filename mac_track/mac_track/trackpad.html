@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Mac Trackpad Remote</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        height: 100vh;
+        background: #f5f5f5;
+      }
+      #container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100vw;
+        height: 100vh;
+      }
+      #controls {
+        width: 100vw;
+        max-width: 600px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        z-index: 2;
+        background: #f5f5f5;
+        padding-top: 2vh;
+      }
+      #trackpad {
+        flex: 1 1 auto;
+        width: 100vw;
+        height: 60vh;
+        background: #fff;
+        border: 2px solid #888;
+        border-radius: 20px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        touch-action: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2em;
+        color: #888;
+        user-select: none;
+        margin-bottom: 2vh;
+        margin-top: 2vh;
+        transition: border-radius 0.2s;
+      }
+      @media (orientation: landscape) {
+        #container {
+          flex-direction: row;
+        }
+        #controls {
+          width: 30vw;
+          max-width: 350px;
+          min-width: 220px;
+          height: 100vh;
+          justify-content: flex-start;
+          align-items: flex-start;
+          padding-top: 4vh;
+        }
+        #trackpad {
+          width: 70vw;
+          height: 100vh;
+          margin: 0;
+          border-radius: 0 20px 20px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="controls">
+        <div id="instructions">
+          <b>How to use:</b><br />
+          1. Enter your Mac's IP address and port below (e.g.
+          ws://192.168.1.10:9000).<br />
+          2. Tap Connect.<br />
+          3. Use the area below as a trackpad!<br />
+          <small>(Your Mac and phone must be on the same Wi-Fi network.)</small>
+        </div>
+        <input
+          id="ws-url"
+          type="text"
+          value="ws://localhost:9000"
+          placeholder="ws://your-mac-ip:9000"
+        />
+        <button id="connect-btn">Connect</button>
+        <div id="status">Not connected</div>
+      </div>
+      <div id="trackpad">Touch and move here</div>
+    </div>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        let ws = null;
+        let lastX = null,
+          lastY = null;
+        const trackpad = document.getElementById("trackpad");
+        const status = document.getElementById("status");
+        const wsUrlInput = document.getElementById("ws-url");
+        const connectBtn = document.getElementById("connect-btn");
+
+        function setStatus(msg, color = "#888") {
+          status.textContent = msg;
+          status.style.color = color;
+        }
+
+        function connectWS() {
+          if (ws) ws.close();
+          ws = new WebSocket(wsUrlInput.value);
+          ws.onopen = () => {
+            setStatus("Connected!", "green");
+            trackpad.textContent = "Move your finger.";
+          };
+          ws.onerror = (e) => {
+            setStatus("WebSocket error. Is the server running?", "red");
+            trackpad.textContent = "Touch and move here";
+          };
+          ws.onclose = () => {
+            setStatus("Disconnected", "#888");
+            trackpad.textContent = "Touch and move here";
+          };
+        }
+
+        connectBtn.onclick = connectWS;
+
+        function sendDelta(dx, dy) {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({ type: "move", dx, dy, timestamp: Date.now() })
+            );
+          }
+        }
+
+        // --- Click and gesture support ---
+        function sendClick(button = "left") {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({ type: "click", button, timestamp: Date.now() })
+            );
+          }
+        }
+        function sendGesture(gesture, details = {}) {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({ type: gesture, ...details, timestamp: Date.now() })
+            );
+          }
+        }
+
+        // Single tap = left click (only if there was no movement)
+        let TAP_THRESHOLD = 10; // pixels, adjust as needed
+        let tapStart = { x: null, y: null, time: null };
+
+        trackpad.addEventListener("touchstart", function (e) {
+          if (e.touches.length === 1) {
+            lastX = e.touches[0].clientX;
+            lastY = e.touches[0].clientY;
+            tapStart.x = lastX;
+            tapStart.y = lastY;
+            tapStart.time = Date.now();
+          }
+        });
+        trackpad.addEventListener("touchend", function (e) {
+          if (e.touches.length === 0 && e.changedTouches.length === 1) {
+            // Only treat as tap if movement was minimal
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            const dist = Math.sqrt(
+              Math.pow(endX - tapStart.x, 2) + Math.pow(endY - tapStart.y, 2)
+            );
+            if (dist < TAP_THRESHOLD) {
+              sendClick("left");
+            }
+          }
+          lastX = null;
+          lastY = null;
+          tapStart.x = null;
+          tapStart.y = null;
+          tapStart.time = null;
+        });
+
+        // Two-finger tap = right click - improved: only trigger if no significant movement
+        let twoFingerTap = {
+          start: null,
+          moved: false
+        };
+        const TWO_FINGER_TAP_THRESHOLD = 15; // px, adjust as needed
+
+        trackpad.addEventListener("touchstart", function (e) {
+          if (e.touches.length === 2) {
+            // Record the midpoint at start
+            twoFingerTap.start = {
+              x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+              y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+            };
+            twoFingerTap.moved = false;
+          }
+        });
+
+        trackpad.addEventListener("touchmove", function (e) {
+          if (e.touches.length === 2 && twoFingerTap.start) {
+            const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            const dist = Math.sqrt(
+              Math.pow(x - twoFingerTap.start.x, 2) + Math.pow(y - twoFingerTap.start.y, 2)
+            );
+            if (dist > TWO_FINGER_TAP_THRESHOLD) {
+              twoFingerTap.moved = true;
+            }
+          }
+        }, { passive: false });
+
+        trackpad.addEventListener("touchend", function (e) {
+          // Only trigger right click if both fingers lifted, and there was no significant movement
+          if (
+            e.touches.length === 0 &&
+            e.changedTouches.length === 2 &&
+            twoFingerTap.start &&
+            !twoFingerTap.moved
+          ) {
+            sendClick("right");
+          }
+          if (e.touches.length < 2) {
+            twoFingerTap.start = null;
+            twoFingerTap.moved = false;
+          }
+        });
+
+        // Two-finger scroll implementation
+        let scrollState = { lastX: null, lastY: null };
+        let SCROLL_THRESHOLD = 2;
+
+        // Only keep two-finger scroll and single-finger move/click if needed
+        trackpad.addEventListener("touchstart", function (e) {
+          if (e.touches.length === 1) {
+            lastX = e.touches[0].clientX;
+            lastY = e.touches[0].clientY;
+          } 
+          else if (e.touches.length === 2) {
+            scrollState.lastX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            scrollState.lastY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          }
+        });
+        trackpad.addEventListener(
+          "touchmove",
+          function (e) {
+            if (e.touches.length === 1) {
+              const x = e.touches[0].clientX;
+              const y = e.touches[0].clientY;
+              if (lastX !== null && lastY !== null) {
+                // Send dx, dy as ratios of the trackpad area
+                const dx = (x - lastX) / trackpad.offsetWidth;
+                const dy = (y - lastY) / trackpad.offsetHeight;
+                sendDelta(dx, dy);
+              }
+              lastX = x;
+              lastY = y;
+            } 
+            else if (e.touches.length === 2) {
+              const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+              const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+              if (scrollState.lastX !== null && scrollState.lastY !== null) {
+                const dx = x - scrollState.lastX;
+                const dy = y - scrollState.lastY;
+                if (
+                  Math.abs(dx) > SCROLL_THRESHOLD ||
+                  Math.abs(dy) > SCROLL_THRESHOLD
+                ) {
+                  sendGesture("scroll", {
+                    dx: dx / trackpad.offsetWidth,
+                    dy: dy / trackpad.offsetHeight,
+                  });
+                }
+              }
+              scrollState.lastX = x;
+              scrollState.lastY = y;
+            }
+            e.preventDefault();
+          },
+          { passive: false }
+        );
+      });
+    </script>
+  </body>
+</html>
